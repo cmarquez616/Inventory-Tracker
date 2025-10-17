@@ -494,6 +494,8 @@
         }
     </style>
 </head>
+<script src="https://unpkg.com/html5-qrcode"></script>
+
 <body>
     <div class="container">
         <!-- Header -->
@@ -607,10 +609,8 @@
                     </button>
                 </div>
                 
-                <div id="videoContainer" class="hidden">
-                    <video id="video" autoplay playsinline></video>
-                    <p class="video-hint">Camera preview. Enter barcode manually or use USB scanner.</p>
-                </div>
+                <div id="reader" style="width: 100%; max-width: 300px; margin-top: 1rem;"></div>
+
             </div>
 
             <div class="form-group">
@@ -1017,9 +1017,36 @@
             tableContainer.innerHTML = tableHTML;
         }
 
-        document.getElementById('settingsBtn').addEventListener('click', function() {
-            switchTab('setup');
-        });
+    document.getElementById('settingsBtn').addEventListener('click', function() {
+  switchTab('setup');
+});
+
+document.getElementById('scanBtn').addEventListener('click', function() {
+  const scanRegion = document.getElementById('reader');
+  scanRegion.innerHTML = ''; // clear previous scan box if any
+
+  const scanner = new Html5Qrcode("reader");
+  scanner.start(
+    { facingMode: "environment" }, // use rear camera
+    {
+      fps: 10,
+      qrbox: 250
+    },
+    (decodedText, decodedResult) => {
+      document.getElementById('barcodeInput').value = decodedText;
+      scanner.stop().then(() => {
+        scanRegion.innerHTML = ''; // remove camera feed
+      }).catch(err => {
+        console.error("Failed to stop scanner", err);
+      });
+    },
+    (errorMessage) => {
+      // Optional: log errors or ignore
+    }
+  ).catch(err => {
+    console.error("Unable to start scanning", err);
+  });
+});
     </script>
 </body>
 </html>
