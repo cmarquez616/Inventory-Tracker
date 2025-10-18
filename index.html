@@ -1063,28 +1063,33 @@ document.getElementById('scanBtn').addEventListener('click', function() {
 });
 
   function lookupProduct() {
-    const barcode = document.getElementById('barcodeInput').value.trim();
-    if (!barcode) {
-      alert('Please enter a barcode first.');
-      return;
-    }
+  const barcode = document.getElementById('barcodeInput').value.trim();
+  if (!barcode) {
+    alert('Please enter a barcode first.');
+    return;
+  }
 
-    fetch(`https://api.upcitemdb.com/prod/trial/lookup?upc=${barcode}`)
-      .then(response => response.json())
-      .then(data => {
-        console.log("UPCitemDB response:", data);
-        if (data.items && data.items.length > 0) {
-          const productName = data.items[0].title;
-          document.getElementById('productNameInput').value = productName;
-          alert('Product name auto-filled.');
-        } else {
-          alert('Product not found for this barcode.');
-        }
-      })
-      .catch(error => {
-        console.error('Barcode lookup error:', error);
-        alert('Error looking up product.');
-      });
+  fetch(`https://api.upcitemdb.com/prod/trial/lookup?upc=${barcode}`)
+    .then(response => response.json())
+    .then(data => {
+      console.log("UPCitemDB response:", data);
+
+      // ✅ Check for valid response
+      if (data.code !== "OK" || !data.items || data.items.length === 0) {
+        alert('Product not found or lookup failed.');
+        return;
+      }
+
+      // ✅ Extract product title
+      const productName = data.items[0].title || "Unknown Product";
+      document.getElementById('productNameInput').value = productName;
+      alert('Product name auto-filled.');
+    })
+    .catch(error => {
+      console.error('Barcode lookup error:', error);
+      alert('Error looking up product.');
+    });
+}
   }
     </script>
 </body>
