@@ -602,6 +602,7 @@
                 <div class="barcode-input-row">
                     <input type="text" id="barcodeInput" placeholder="Enter or scan barcode">
                     <button class="btn btn-primary" id="scanBtn" onclick="toggleScanner()">
+                    <button class="btn btn-secondary btn-sm mt-2" onclick="lookupProduct()">Lookup Product</button>
                         <svg class="btn-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"></path>
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"></path>
@@ -1052,6 +1053,31 @@ document.getElementById('scanBtn').addEventListener('click', function() {
     console.error("Unable to start scanning", err);
   });
 });
+
+  function lookupProduct() {
+    const barcode = document.getElementById('barcodeInput').value.trim();
+    if (!barcode) {
+      alert('Please enter a barcode first.');
+      return;
+    }
+
+    fetch(`https://api.upcitemdb.com/prod/trial/lookup?upc=${barcode}`)
+      .then(response => response.json())
+      .then(data => {
+        console.log("UPCitemDB response:", data);
+        if (data.items && data.items.length > 0) {
+          const productName = data.items[0].title;
+          document.getElementById('productNameInput').value = productName;
+          alert('Product name auto-filled.');
+        } else {
+          alert('Product not found for this barcode.');
+        }
+      })
+      .catch(error => {
+        console.error('Barcode lookup error:', error);
+        alert('Error looking up product.');
+      });
+  }
     </script>
 </body>
 </html>
