@@ -261,14 +261,10 @@
             display: flex;
             gap: 0.5rem;
             margin-bottom: 0.75rem;
-            align-items: center; /* ✅ aligns input and buttons vertically */
-            flex-wrap: wrap;     /* ✅ ensures responsiveness on mobile */
+            align-items: center;
+            flex-wrap: wrap;
         }
-         .scan-btn {
-           display: inline-flex;
-           align-items: center;
-           gap: 6px;
-         }
+
         .barcode-input-row input {
             flex: 1;
         }
@@ -304,6 +300,17 @@
             box-shadow: 0 4px 8px rgba(79, 70, 229, 0.3);
         }
 
+        .btn-secondary {
+            background: #6B7280;
+            color: white;
+            box-shadow: 0 2px 4px rgba(107, 114, 128, 0.2);
+        }
+
+        .btn-secondary:hover:not(:disabled) {
+            background: #4B5563;
+            box-shadow: 0 4px 8px rgba(107, 114, 128, 0.3);
+        }
+
         .btn-danger {
             background: #DC2626;
             color: white;
@@ -317,25 +324,14 @@
             width: 100%;
         }
 
+        .btn-sm {
+            padding: 0.5rem 1rem;
+            font-size: 0.875rem;
+        }
+
         .btn-icon {
             width: 20px;
             height: 20px;
-        }
-
-        #videoContainer {
-            margin-top: 0.75rem;
-        }
-
-        #video {
-            width: 100%;
-            border-radius: 8px;
-            border: 2px solid #4F46E5;
-        }
-
-        .video-hint {
-            font-size: 0.75rem;
-            color: #6B7280;
-            margin-top: 0.5rem;
         }
 
         .view-header {
@@ -499,9 +495,8 @@
             }
         }
     </style>
-<script src="https://unpkg.com/html5-qrcode"></script>
+    <script src="https://unpkg.com/html5-qrcode"></script>
 </head>
-
 
 <body>
     <div class="container">
@@ -608,19 +603,18 @@
                 <div class="barcode-input-row">
                     <input type="text" id="barcodeInput" placeholder="Enter or scan barcode">
                     
-                    <button class="btn btn-primary" id="scanBtn" onclick="toggleScanner()">
+                    <button class="btn btn-primary" id="scanBtn">
                         <svg class="btn-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"></path>
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"></path>
                         </svg>
-                        <span id="scanBtnText">Scan</span>
+                        Scan Barcode
                     </button>
-                    <!-- Lookup Button -->
-                   <button class="btn btn-secondary btn-sm mt-2" onclick="lookupProduct()">Lookup Product</button>
+                    
+                    <button class="btn btn-secondary btn-sm" onclick="lookupProduct()">Lookup Product</button>
                 </div>
                 
                 <div id="reader" style="width: 100%; max-width: 300px; margin-top: 1rem;"></div>
-
             </div>
 
             <div class="form-group">
@@ -684,412 +678,382 @@
     </div>
 
     <script>
-        let apiUrl = '';
-        let inventory = [];
-        let isScanning = false;
-        let stream = null;
+let apiUrl = '';
+let inventory = [];
+let isScanning = false;
+let html5QrCode = null;
 
-        window.onload = function() {
-            const savedUrl = localStorage.getItem('inventoryApiUrl');
-            if (savedUrl) {
-                document.getElementById('apiUrlInput').value = savedUrl;
-                apiUrl = savedUrl;
-                setConnected(true);
-                
-            // ✅ Delay to ensure DOM is ready on mobile
-            setTimeout(() => {
+window.onload = function() {
+    const savedUrl = localStorage.getItem('inventoryApiUrl');
+    if (savedUrl) {
+        document.getElementById('apiUrlInput').value = savedUrl;
+        apiUrl = savedUrl;
+        setConnected(true);
+        
+        setTimeout(() => {
             loadInventory();
-                }, 100);
-            }
-        };
-
-        // Detect if user is on mobile device
-        function isMobileDevice() {
-            return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-        }
-
-        // Auto-open camera on mobile when switching to Add Item tab
-        const originalSwitchTab = switchTab;
-        switchTab = function(tab) {
-            originalSwitchTab(tab);
-            
-            // Auto-start camera on mobile when going to Add tab
-            if (tab === 'add' && isMobileDevice() && !isScanning) {
-                // Small delay to ensure tab content is visible
-                setTimeout(() => {
-                    toggleScanner();
-                }, 300);
-            }
-            
-            // Stop camera when leaving Add tab
-            if (tab !== 'add' && isScanning) {
-                toggleScanner();
-            }
-        };
-
-        function showNotification(message, type = 'success') {
-            const notification = document.getElementById('notification');
-            const notificationText = document.getElementById('notificationText');
-            
-            notification.classList.remove('success', 'error', 'info');
-            notification.classList.add('show', type);
-            notificationText.textContent = message;
-            
-            setTimeout(() => {
-                notification.classList.remove('show');
-            }, 4000);
-        }
-
-        function setConnected(connected) {
-            const status = document.getElementById('connectionStatus');
-            const addTab = document.getElementById('addTab');
-            const viewTab = document.getElementById('viewTab');
-            const settingsBtn = document.getElementById('settingsBtn');
-            const connectionSuccess = document.getElementById('connectionSuccess');
-            
-            if (connected) {
-                status.textContent = '✓ Connected to Google Sheets';
-                addTab.disabled = false;
-                viewTab.disabled = false;
-                settingsBtn.classList.remove('hidden');
-                connectionSuccess.classList.remove('hidden');
-            } else {
-                status.textContent = '○ Not connected';
-                addTab.disabled = true;
-                viewTab.disabled = true;
-                settingsBtn.classList.add('hidden');
-                connectionSuccess.classList.add('hidden');
-            }
-        }
-
-        function switchTab(tab) {
-            const tabs = ['setup', 'add', 'view'];
-            tabs.forEach(t => {
-                document.getElementById(t + 'Content').classList.add('hidden');
-                const tabBtn = document.getElementById(t + 'Tab');
-                tabBtn.classList.remove('active');
-            });
-            
-            document.getElementById(tab + 'Content').classList.remove('hidden');
-            document.getElementById(tab + 'Tab').classList.add('active');
-        }
-
-        function connectToAPI() {
-            const urlInput = document.getElementById('apiUrlInput').value.trim();
-            
-            if (!urlInput) {
-                showNotification('Please enter your Web App URL', 'error');
-                return;
-            }
-            
-            localStorage.setItem('inventoryApiUrl', urlInput);
-            apiUrl = urlInput;
-            setConnected(true);
-            loadInventory();
-            showNotification('Connected to Google Sheets!');
-            switchTab('add');
-        }
-
-        async function loadInventory() {
-            try {
-                const response = await fetch(apiUrl, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                    body: 'action=getInventory'
-                });
-                
-                const result = await response.json();
-                
-                if (result.success) {
-                    inventory = result.data || [];
-                    updateInventoryDisplay();
-                    document.getElementById('inventoryCount').textContent = inventory.length;
-                } else {
-                    showNotification('Error loading inventory: ' + result.message, 'error');
-                }
-            } catch (error) {
-                showNotification('Failed to connect to Google Sheets. Check your URL.', 'error');
-            }
-        }
-
-        async function addItem() {
-            const productName = document.getElementById('productNameInput').value.trim();
-            const quantity = document.getElementById('quantityInput').value;
-            const price = document.getElementById('priceInput').value;
-            const barcode = document.getElementById('barcodeInput').value.trim() || 'N/A';
-            const notes = document.getElementById('notesInput').value.trim();
-            
-            if (!productName || !quantity || !price) {
-                showNotification('Please fill in Product Name, Quantity, and Purchase Price', 'error');
-                return;
-            }
-            
-            const dateAdded = new Date().toLocaleDateString('en-US', { 
-                year: 'numeric', 
-                month: '2-digit', 
-                day: '2-digit' 
-            });
-            
-            const btn = document.getElementById('addItemBtn');
-            btn.disabled = true;
-            btn.innerHTML = '<svg class="btn-icon animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg> Adding...';
-            
-            try {
-                const params = new URLSearchParams({
-                    action: 'addItem',
-                    barcode: barcode,
-                    productName: productName,
-                    quantity: quantity,
-                    price: price,
-                    dateAdded: dateAdded,
-                    notes: notes
-                });
-                
-                const response = await fetch(apiUrl, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                    body: params.toString()
-                });
-                
-                const result = await response.json();
-                
-                if (result.success) {
-                    showNotification('Item added to Google Sheets successfully!');
-                    document.getElementById('barcodeInput').value = '';
-                    document.getElementById('productNameInput').value = '';
-                    document.getElementById('quantityInput').value = '';
-                    document.getElementById('priceInput').value = '';
-                    document.getElementById('notesInput').value = '';
-                    await loadInventory();
-                } else {
-                    showNotification('Error: ' + result.message, 'error');
-                }
-            } catch (error) {
-                showNotification('Failed to add item. Check your connection.', 'error');
-            }
-            
-            btn.disabled = false;
-            btn.innerHTML = '<svg class="btn-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg> Add to Inventory';
-        }
-
-        function toggleScanner() {
-            const video = document.getElementById('video');
-            const videoContainer = document.getElementById('videoContainer');
-            const scanBtn = document.getElementById('scanBtn');
-            const scanBtnText = document.getElementById('scanBtnText');
-            
-            if (!isScanning) {
-                navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
-                    .then(s => {
-                        stream = s;
-                        video.srcObject = stream;
-                        videoContainer.classList.remove('hidden');
-                        isScanning = true;
-                        scanBtnText.textContent = 'Stop';
-                        scanBtn.classList.remove('btn-primary');
-                        scanBtn.classList.add('btn-danger');
-                    })
-                    .catch(err => {
-                        showNotification('Camera access denied. Please enable camera permissions or enter barcode manually.', 'error');
-                    });
-            } else {
-                if (stream) {
-                    stream.getTracks().forEach(track => track.stop());
-                    stream = null;
-                }
-                videoContainer.classList.add('hidden');
-                isScanning = false;
-                scanBtnText.textContent = 'Scan';
-                scanBtn.classList.remove('btn-danger');
-                scanBtn.classList.add('btn-primary');
-            }
-        }
-
-        function refreshInventory() {
-            const icon = document.getElementById('refreshIcon');
-            icon.classList.add('animate-spin');
-            loadInventory();
-            showNotification('Inventory refreshed!');
-            setTimeout(() => {
-                icon.classList.remove('animate-spin');
-            }, 1000);
-        }
-
-        function updateInventoryDisplay() {
-            const tableContainer = document.getElementById('inventoryTable');
-            document.getElementById('totalItems').textContent = inventory.length;
-            
-            const totalValue = inventory.reduce((sum, item) => {
-                return sum + (Number(item.quantity) * Number(item.price));
-            }, 0);
-            document.getElementById('totalValue').textContent = totalValue.toFixed(2);
-            
-            if (inventory.length === 0) {
-                tableContainer.innerHTML = `
-                    <div class="empty-state">
-                        <svg class="empty-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path>
-                        </svg>
-                        <p>No items in inventory yet</p>
-                        <p>Add your first item to get started!</p>
-                    </div>
-                `;
-                return;
-            }
-            
-            let tableHTML = `
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Barcode</th>
-                            <th>Product</th>
-                            <th>Qty</th>
-                            <th>Price</th>
-                            <th>Total</th>
-                            <th>Date</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-            `;
-            
-            inventory.forEach(item => {
-                const itemTotal = (Number(item.quantity) * Number(item.price)).toFixed(2);
-                tableHTML += `
-                    <tr>
-                        <td class="barcode-cell">${item.barcode}</td>
-                        <td class="product-cell">${item.productName}</td>
-                        <td>${item.quantity}</td>
-                        <td class="price-cell">${Number(item.price).toFixed(2)}</td>
-                        <td class="total-cell">${itemTotal}</td>
-                        <td>${item.dateAdded}</td>
-                    </tr>
-                `;
-            });
-            
-            tableHTML += `
-                    </tbody>
-                </table>
-            `;
-            
-            tableContainer.innerHTML = tableHTML;
-        }
-
-        function filterInventory() {
-            const searchTerm = document.getElementById('searchInput').value.toLowerCase();
-            const tableContainer = document.getElementById('inventoryTable');
-            
-            const filtered = inventory.filter(item => {
-                const productName = String(item.productName).toLowerCase();
-                const barcode = String(item.barcode).toLowerCase();
-                return productName.includes(searchTerm) || barcode.includes(searchTerm);
-            });
-            
-            if (filtered.length === 0) {
-                tableContainer.innerHTML = `
-                    <div class="empty-state">
-                        <p>No items found</p>
-                        <p>Try a different search term</p>
-                    </div>
-                `;
-                return;
-            }
-            
-            let tableHTML = `
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Barcode</th>
-                            <th>Product</th>
-                            <th>Qty</th>
-                            <th>Price</th>
-                            <th>Total</th>
-                            <th>Date</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-            `;
-            
-            filtered.forEach(item => {
-                const itemTotal = (Number(item.quantity) * Number(item.price)).toFixed(2);
-                tableHTML += `
-                    <tr>
-                        <td class="barcode-cell">${item.barcode}</td>
-                        <td class="product-cell">${item.productName}</td>
-                        <td>${item.quantity}</td>
-                        <td class="price-cell">${Number(item.price).toFixed(2)}</td>
-                        <td class="total-cell">${itemTotal}</td>
-                        <td>${item.dateAdded}</td>
-                    </tr>
-                `;
-            });
-            
-            tableHTML += `
-                    </tbody>
-                </table>
-            `;
-            
-            tableContainer.innerHTML = tableHTML;
-        }
-
-    document.getElementById('settingsBtn').addEventListener('click', function() {
-  switchTab('setup');
-});
-
-document.getElementById('scanBtn').addEventListener('click', function() {
-  const scanRegion = document.getElementById('reader');
-  scanRegion.innerHTML = ''; // clear previous scan box if any
-
-  const scanner = new Html5Qrcode("reader");
-  scanner.start(
-    { facingMode: "environment" }, // use rear camera
-    {
-      fps: 10,
-      qrbox: 250
-    },
-    (decodedText, decodedResult) => {
-      document.getElementById('barcodeInput').value = decodedText;
-      scanner.stop().then(() => {
-        scanRegion.innerHTML = ''; // remove camera feed
-      }).catch(err => {
-        console.error("Failed to stop scanner", err);
-      });
-    },
-    (errorMessage) => {
-      // Optional: log errors or ignore
+        }, 100);
     }
-  ).catch(err => {
-    console.error("Unable to start scanning", err);
-  });
+};
+
+function isMobileDevice() {
+    return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+}
+
+function showNotification(message, type = 'success') {
+    const notification = document.getElementById('notification');
+    const notificationText = document.getElementById('notificationText');
+    
+    notification.classList.remove('success', 'error', 'info');
+    notification.classList.add('show', type);
+    notificationText.textContent = message;
+    
+    setTimeout(() => {
+        notification.classList.remove('show');
+    }, 4000);
+}
+
+function setConnected(connected) {
+    const status = document.getElementById('connectionStatus');
+    const addTab = document.getElementById('addTab');
+    const viewTab = document.getElementById('viewTab');
+    const settingsBtn = document.getElementById('settingsBtn');
+    const connectionSuccess = document.getElementById('connectionSuccess');
+    
+    if (connected) {
+        status.textContent = '✓ Connected to Google Sheets';
+        addTab.disabled = false;
+        viewTab.disabled = false;
+        settingsBtn.classList.remove('hidden');
+        connectionSuccess.classList.remove('hidden');
+    } else {
+        status.textContent = '○ Not connected';
+        addTab.disabled = true;
+        viewTab.disabled = true;
+        settingsBtn.classList.add('hidden');
+        connectionSuccess.classList.add('hidden');
+    }
+}
+
+function switchTab(tab) {
+    const tabs = ['setup', 'add', 'view'];
+    tabs.forEach(t => {
+        document.getElementById(t + 'Content').classList.add('hidden');
+        const tabBtn = document.getElementById(t + 'Tab');
+        tabBtn.classList.remove('active');
+    });
+    
+    document.getElementById(tab + 'Content').classList.remove('hidden');
+    document.getElementById(tab + 'Tab').classList.add('active');
+    
+    // Stop scanner when leaving Add tab
+    if (tab !== 'add' && isScanning) {
+        stopBarcodeScanner();
+    }
+}
+
+function connectToAPI() {
+    const urlInput = document.getElementById('apiUrlInput').value.trim();
+    
+    if (!urlInput) {
+        showNotification('Please enter your Web App URL', 'error');
+        return;
+    }
+    
+    localStorage.setItem('inventoryApiUrl', urlInput);
+    apiUrl = urlInput;
+    setConnected(true);
+    loadInventory();
+    showNotification('Connected to Google Sheets!');
+    switchTab('add');
+}
+
+async function loadInventory() {
+    try {
+        const response = await fetch(apiUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: 'action=getInventory'
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            inventory = result.data || [];
+            updateInventoryDisplay();
+            document.getElementById('inventoryCount').textContent = inventory.length;
+        } else {
+            showNotification('Error loading inventory: ' + result.message, 'error');
+        }
+    } catch (error) {
+        showNotification('Failed to connect to Google Sheets. Check your URL.', 'error');
+    }
+}
+
+async function addItem() {
+    const productName = document.getElementById('productNameInput').value.trim();
+    const quantity = document.getElementById('quantityInput').value;
+    const price = document.getElementById('priceInput').value;
+    const barcode = document.getElementById('barcodeInput').value.trim() || 'N/A';
+    const notes = document.getElementById('notesInput').value.trim();
+    
+    if (!productName || !quantity || !price) {
+        showNotification('Please fill in Product Name, Quantity, and Purchase Price', 'error');
+        return;
+    }
+    
+    const dateAdded = new Date().toLocaleDateString('en-US', { 
+        year: 'numeric', 
+        month: '2-digit', 
+        day: '2-digit' 
+    });
+    
+    const btn = document.getElementById('addItemBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<svg class="btn-icon animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg> Adding...';
+    
+    try {
+        const params = new URLSearchParams({
+            action: 'addItem',
+            barcode: barcode,
+            productName: productName,
+            quantity: quantity,
+            price: price,
+            dateAdded: dateAdded,
+            notes: notes
+        });
+        
+        const response = await fetch(apiUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: params.toString()
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            showNotification('Item added to Google Sheets successfully!');
+            document.getElementById('barcodeInput').value = '';
+            document.getElementById('productNameInput').value = '';
+            document.getElementById('quantityInput').value = '';
+            document.getElementById('priceInput').value = '';
+            document.getElementById('notesInput').value = '';
+            await loadInventory();
+        } else {
+            showNotification('Error: ' + result.message, 'error');
+        }
+    } catch (error) {
+        showNotification('Failed to add item. Check your connection.', 'error');
+    }
+    
+    btn.disabled = false;
+    btn.innerHTML = '<svg class="btn-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg> Add to Inventory';
+}
+
+function refreshInventory() {
+    const icon = document.getElementById('refreshIcon');
+    icon.classList.add('animate-spin');
+    loadInventory();
+    showNotification('Inventory refreshed!');
+    setTimeout(() => {
+        icon.classList.remove('animate-spin');
+    }, 1000);
+}
+
+function updateInventoryDisplay() {
+    const tableContainer = document.getElementById('inventoryTable');
+    document.getElementById('totalItems').textContent = inventory.length;
+    
+    const totalValue = inventory.reduce((sum, item) => {
+        return sum + (Number(item.quantity) * Number(item.price));
+    }, 0);
+    document.getElementById('totalValue').textContent = totalValue.toFixed(2);
+    
+    if (inventory.length === 0) {
+        tableContainer.innerHTML = `
+            <div class="empty-state">
+                <svg class="empty-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path>
+                </svg>
+                <p>No items in inventory yet</p>
+                <p>Add your first item to get started!</p>
+            </div>
+        `;
+        return;
+    }
+    
+    let tableHTML = `
+        <table>
+            <thead>
+                <tr>
+                    <th>Barcode</th>
+                    <th>Product</th>
+                    <th>Qty</th>
+                    <th>Price</th>
+                    <th>Total</th>
+                    <th>Date</th>
+                </tr>
+            </thead>
+            <tbody>
+    `;
+    
+    inventory.forEach(item => {
+        const itemTotal = (Number(item.quantity) * Number(item.price)).toFixed(2);
+        tableHTML += `
+            <tr>
+                <td class="barcode-cell">${item.barcode}</td>
+                <td class="product-cell">${item.productName}</td>
+                <td>${item.quantity}</td>
+                <td class="price-cell">$${Number(item.price).toFixed(2)}</td>
+                <td class="total-cell">$${itemTotal}</td>
+                <td>${item.dateAdded}</td>
+            </tr>
+        `;
+    });
+    
+    tableHTML += `
+            </tbody>
+        </table>
+    `;
+    
+    tableContainer.innerHTML = tableHTML;
+}
+
+function filterInventory() {
+    const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+    const tableContainer = document.getElementById('inventoryTable');
+    
+    const filtered = inventory.filter(item => {
+        const productName = String(item.productName).toLowerCase();
+        const barcode = String(item.barcode).toLowerCase();
+        return productName.includes(searchTerm) || barcode.includes(searchTerm);
+    });
+    
+    if (filtered.length === 0) {
+        tableContainer.innerHTML = `
+            <div class="empty-state">
+                <p>No items found</p>
+                <p>Try a different search term</p>
+            </div>
+        `;
+        return;
+    }
+    
+    let tableHTML = `
+        <table>
+            <thead>
+                <tr>
+                    <th>Barcode</th>
+                    <th>Product</th>
+                    <th>Qty</th>
+                    <th>Price</th>
+                    <th>Total</th>
+                    <th>Date</th>
+                </tr>
+            </thead>
+            <tbody>
+    `;
+    
+    filtered.forEach(item => {
+        const itemTotal = (Number(item.quantity) * Number(item.price)).toFixed(2);
+        tableHTML += `
+            <tr>
+                <td class="barcode-cell">${item.barcode}</td>
+                <td class="product-cell">${item.productName}</td>
+                <td>${item.quantity}</td>
+                <td class="price-cell">$${Number(item.price).toFixed(2)}</td>
+                <td class="total-cell">$${itemTotal}</td>
+                <td>${item.dateAdded}</td>
+            </tr>
+        `;
+    });
+    
+    tableHTML += `
+            </tbody>
+        </table>
+    `;
+    
+    tableContainer.innerHTML = tableHTML;
+}
+
+function stopBarcodeScanner() {
+    const scanRegion = document.getElementById('reader');
+    if (html5QrCode && isScanning) {
+        html5QrCode.stop().then(() => {
+            scanRegion.innerHTML = '';
+            isScanning = false;
+        }).catch(err => {
+            console.error("Failed to stop scanner", err);
+        });
+    }
+}
+
+function lookupProduct() {
+    const barcode = document.getElementById('barcodeInput').value.trim();
+    if (!barcode) {
+        showNotification('Please enter a barcode first.', 'error');
+        return;
+    }
+
+    fetch(`https://api.upcitemdb.com/prod/trial/lookup?upc=${barcode}`)
+        .then(response => response.json())
+        .then(data => {
+            console.log("UPCitemDB response:", data);
+
+            if (data.code !== "OK" || !data.items || data.items.length === 0) {
+                showNotification('Product not found or lookup failed.', 'error');
+                return;
+            }
+
+            const productName = data.items[0].title || "Unknown Product";
+            document.getElementById('productNameInput').value = productName;
+            showNotification('Product name auto-filled!');
+        })
+        .catch(error => {
+            console.error('Barcode lookup error:', error);
+            showNotification('Error looking up product.', 'error');
+        });
+}
+
+// Settings button event listener
+document.getElementById('settingsBtn').addEventListener('click', function() {
+    switchTab('setup');
 });
 
-  function lookupProduct() {
-  const barcode = document.getElementById('barcodeInput').value.trim();
-  if (!barcode) {
-    alert('Please enter a barcode first.');
-    return;
-  }
-
-  fetch(`https://api.upcitemdb.com/prod/trial/lookup?upc=${barcode}`)
-    .then(response => response.json())
-    .then(data => {
-      console.log("UPCitemDB response:", data);
-
-      // ✅ Check for valid response
-      if (data.code !== "OK" || !data.items || data.items.length === 0) {
-        alert('Product not found or lookup failed.');
+// Scan button event listener
+document.getElementById('scanBtn').addEventListener('click', function() {
+    const scanRegion = document.getElementById('reader');
+    
+    // If already scanning, stop it
+    if (isScanning) {
+        stopBarcodeScanner();
         return;
-      }
+    }
+    
+    scanRegion.innerHTML = '';
 
-      // ✅ Extract product title
-      const productName = data.items[0].title || "Unknown Product";
-      document.getElementById('productNameInput').value = productName;
-      alert('Product name auto-filled.');
-    })
-    .catch(error => {
-      console.error('Barcode lookup error:', error);
-      alert('Error looking up product.');
+    html5QrCode = new Html5Qrcode("reader");
+    html5QrCode.start(
+        { facingMode: "environment" },
+        {
+            fps: 10,
+            qrbox: 250
+        },
+        (decodedText, decodedResult) => {
+            document.getElementById('barcodeInput').value = decodedText;
+            showNotification('Barcode scanned successfully!');
+            stopBarcodeScanner();
+        },
+        (errorMessage) => {
+            // Ignore scanning errors (too noisy)
+        }
+    ).then(() => {
+        isScanning = true;
+    }).catch(err => {
+        console.error("Unable to start scanning", err);
+        showNotification('Unable to start camera. Please check permissions.', 'error');
     });
-  }
+});
     </script>
 </body>
 </html>
