@@ -995,65 +995,79 @@ function lookupProduct() {
         return;
     }
 
-    fetch(`https://api.upcitemdb.com/prod/trial/lookup?upc=${barcode}`)
+    // Show loading state
+    showNotification('Looking up product...', 'info');
+
+    // Try OpenFoodFacts API first (free, no rate limits, works well for food items)
+    fetch(`https://world.openfoodfacts.org/api/v0/product/${barcode}.json`)
         .then(response => response.json())
         .then(data => {
-            console.log("UPCitemDB response:", data);
+            console.log("OpenFoodFacts response:", data);
 
-            if (data.code !== "OK" || !data.items || data.items.length === 0) {
-                showNotification('Product not found or lookup failed.', 'error');
-                return;
+            if (data.status === 1 && data.product && data.product.product_name) {
+                const productName = data.product.product_name;
+                document.getElementById('productNameInput').value = productName;
+                showNotification('Product name auto-filled!');
+            } else {
+                // If OpenFoodFacts fails, try UPCitemDB as backup
+                return tryUPCItemDB(barcode);
             }
-
-            const productName = data.items[0].title || "Unknown Product";
-            document.getElementById('productNameInput').value = productName;
-            showNotification('Product name auto-filled!');
         })
         .catch(error => {
-            console.error('Barcode lookup error:', error);
-            showNotification('Error looking up product.', 'error');
+            console.error('OpenFoodFacts lookup error:', error);
+            // Try backup API
+            return tryUPCItemDB(barcode);
         });
 }
 
-// Settings button event listener
-document.getElementById('settingsBtn').addEventListener('click', function() {
-    switchTab('setup');
-});
+function tryUPCItemDB(barcode) {
+    return fetch(`https://api.upcitemdb.com/prod/trial/lookup?upc=${barcode}`)
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            console.log("UPCitemDB response:", data);
 
-// Scan button event listener
-document.getElementById('scanBtn').addEventListener('click', function() {
-    const scanRegion = document.getElementById('reader');
-    
-    // If already scanning, stop it
-    if (isScanning) {
-        stopBarcodeScanner();
-        return;
-    }
-    
-    scanRegion.innerHTML = '';
+            if (data.code === "OK" && data.items && data.items.length > 0) {
+                const productName = data.items[0].title || "Unknown Product";
+                document.getElementById('productNameInput').value = productName;
+                showNotification('Product name auto-filled!');
+            } else {
+                showNotification('Product not found in database. Please enter manually.', 'error');
+            }
+        })
+        .catch(error => {
+            console.error('UPCitemDB lookup error:', error);
+            showNotification('Product not found in database. Please enter manually.', 'error');
+        });
+}
 
-    html5QrCode = new Html5Qrcode("reader");
-    html5QrCode.start(
-        { facingMode: "environment" },
-        {
-            fps: 10,
-            qrbox: 250
-        },
-        (decodedText, decodedResult) => {
-            document.getElementById('barcodeInput').value = decodedText;
-            showNotification('Barcode scanned successfully!');
-            stopBarcodeScanner();
-        },
-        (errorMessage) => {
-            // Ignore scanning errors (too noisy)
-        }
-    ).then(() => {
-        isScanning = true;
-    }).catch(err => {
-        console.error("Unable to start scanning", err);
-        showNotification('Unable to start camera. Please check permissions.', 'error');
-    });
-});
+// Alternative: You can also add Barcode Lookup API as another option
+function tryBarcodeLookupAPI(barcode) {
+    // This requires an API key from barcodelookup.com (free tier available)
+    const apiKey = 'YOUR_API_KEY_HERE'; // Get free key from https://www.barcodelookup.com/api
+    
+    return fetch(`https://api.barcodelookup.com/v3/products?barcode=${barcode}&key=${apiKey}`)
+        .then(response => response.json())
+        .then(data => {
+            console.log("BarcodeLookup response:", data);
+            
+            if (data.products && data.products.length > 0) {
+                const productName = data.products[0].title || data.products[0].product_name;
+                document.getElementById('productNameInput').value = productName;
+                showNotification('Product name auto-filled!');
+            } else {
+                showNotification('Product not found in database. Please enter manually.', 'error');
+            }
+        })
+        .catch(error => {
+            console.error('BarcodeLookup error:', error);
+            showNotification('Product not found in database. Please enter manually.', 'error');
+        });
+}
     </script>
 </body>
 </html>
