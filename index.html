@@ -686,7 +686,11 @@
                 document.getElementById('apiUrlInput').value = savedUrl;
                 apiUrl = savedUrl;
                 setConnected(true);
-                loadInventory();
+                
+            // ✅ Delay to ensure DOM is ready on mobile
+            setTimeout(() => {
+            loadInventory();
+                }, 100);
             }
         };
 
